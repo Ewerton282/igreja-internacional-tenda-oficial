@@ -1,0 +1,8 @@
+{
+  "name": "Igreja Internacional Tenda",
+  "description": "Uma igreja acolhedora, vibrante e fundamentada no amor de Cristo. Horários de cultos, mensagens, ministérios e comunidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
