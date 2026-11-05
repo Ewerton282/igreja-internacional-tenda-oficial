@@ -10,11 +10,11 @@ export const CHURCH_INFO = {
   pixKey: '44.705.310/0001-87',
   pixCopiaECola: '00020101021126350013BR.GOV.BR.PIX0114447053100001875204000053039865802BR5926IGREJA INTERNACIONAL TENDA6009SAO PAULO62070503***6304ABC2',
   cnpj: '44.705.310/0001-87',
-  logo: '/public/assets/church/logo_tenda_official.png',
-  heroBg: '/public/assets/church/hero_tent_clean.png',
-  ministeriosBanner: '/assets/aistudio/ministerio_5c7189c0.jpg',
-  qrCode: '/public/assets/church/pix_qr_code.png',
-  mapPreview: '/public/assets/church/map_preview.png',
+  logo: '/assets/church/logo_tenda_official.png',
+  heroBg: '/assets/church/hero_tent_clean.png',
+  ministeriosBanner: '/assets/images/church_kids_ministry_1793125685667.jpg',
+  qrCode: '/assets/church/pix_qr_code.png',
+  mapPreview: '/assets/church/map_preview.png',
   social: {
     instagram: 'https://www.instagram.com/igrejatenda12?obrf=b2V0bzF2czRkNHNp',
     instagramHandle: '@igrejatenda12',
@@ -174,7 +174,7 @@ export const MINISTERIOS: MinisterioItem[] = [
     id: 'midia',
     title: 'Mídia, Comunicação & Tecnologia',
     category: 'Comunicação',
-    leader: 'Ewerton & Nicolle',
+    leader: 'Fernando, Nicolle & Ewerton',
     target: 'Transmissão, Design e Tecnologia',
     schedule: 'Durante todos os cultos e eventos',
     desc: 'Levando a mensagem de Cristo além das quatro paredes através de transmissões ao vivo, mídias sociais, som, iluminação e fotografia.',
@@ -244,19 +244,19 @@ export const MINISTERIOS: MinisterioItem[] = [
 
 export const LIDERES = [
   {
-    name: 'Christiam Lobatchevsky',
+    name: 'Christian Lobatchevsky',
     role: 'APÓSTOLO',
-    image: '/public/assets/church/leader_christian.jpg?v=3',
+    image: '/assets/church/leader_christiam.jpg,
   },
   {
     name: 'Patrícia Lobatchevsky',
     role: 'APÓSTOLA',
-    image: '/public/assets/church/leader_patricia.jpg?v=2',
+    image: '/assets/church/leader_patricia.jpg?,
   },
   {
     name: 'Mauro Silva',
     role: 'PASTOR',
-    image: '/public/assets/church/leader_mauro.jpg?v=2',
+    image: '/assets/church/leader_mauro.jpg,
   },
 ];
 
