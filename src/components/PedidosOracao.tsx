@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HeartHandshake, Lock, Globe, Send, CheckCircle2, MessageSquare } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 interface PedidoOracaoData {
   id?: number;
