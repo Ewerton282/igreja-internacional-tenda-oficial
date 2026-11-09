@@ -1,454 +1,243 @@
 import React, { useState, useEffect } from 'react';
-import { HeartHandshake, Lock, Globe, Send, CheckCircle2, MessageCircle, Clock, ShieldCheck, Sparkles, UserCheck } from 'lucide-react';
-import { CHURCH_INFO, CATEGORIAS_ORACAO, PedidoOracaoItem } from '../data/churchData';
+import { HeartHandshake, Lock, Globe, Send, CheckCircle2, MessageSquare } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-const PRAYERS_STORAGE_KEY = 'tenda_visitor_prayers_v2';
-const PRAYED_IDS_KEY = 'tenda_prayed_items_v2';
+interface PedidoOracaoData {
+  id?: number;
+  name: string;
+  whatsapp: string;
+  category: string;
+  request_text: string;
+  is_confidential: boolean;
+  created_at?: string;
+}
+
+export const CATEGORIAS_ORACAO = [
+  'Saúde & Cura',
+  'Família & Lar',
+  'Vida Financeira',
+  'Causas na Justiça',
+  'Libertação & Proteção',
+  'Restauração Espiritual',
+  'Outros Motivos'
+];
 
 export const PedidosOracao: React.FC = () => {
-  const [prayers, setPrayers] = useState<PedidoOracaoItem[]>([]);
-  const [prayedIds, setPrayedIds] = useState<string[]>([]);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('todos');
+  const [prayers, setPrayers] = useState<PedidoOracaoData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [category, setCategory] = useState(CATEGORIAS_ORACAO[0]);
-  const [text, setText] = useState('');
+  const [requestText, setRequestText] = useState('');
   const [isConfidential, setIsConfidential] = useState(false);
-  const [sendWhatsAppDirect, setSendWhatsAppDirect] = useState(false);
-  const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  // Load from localStorage (without mock/sample messages)
-  useEffect(() => {
+  // 1. FUNÇÃO QUE CARREGA OS PEDIDOS DO BANCO SQL
+  const fetchPrayers = async () => {
     try {
-      // Clear legacy sample keys if any exist in the browser
-      try {
-        localStorage.removeItem('tenda_visitor_prayers_v1');
-        localStorage.removeItem('tenda_prayed_items_v1');
-      } catch {
-        // ignore
-      }
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pedidos_oracao')
+        .select('*')
+        .eq('manter_confidencial', false) // Só mostra o que NÃO for confidencial
+        .order('criado_em', { ascending: false });
 
-      const storedPrayers = localStorage.getItem(PRAYERS_STORAGE_KEY);
-      if (storedPrayers) {
-        const parsed = JSON.parse(storedPrayers);
-        // Ensure no lingering sample items appear
-        const userPrayers = Array.isArray(parsed)
-          ? parsed.filter((p: PedidoOracaoItem) => !p.id?.startsWith('prayer-sample-'))
-          : [];
-        setPrayers(userPrayers);
-      } else {
-        setPrayers([]);
-      }
+      if (error) throw error;
 
-      const storedPrayedIds = localStorage.getItem(PRAYED_IDS_KEY);
-      if (storedPrayedIds) {
-        setPrayedIds(JSON.parse(storedPrayedIds));
+      if (data) {
+        // Mapeia os nomes das colunas do banco para o seu estado do React
+        const mappedPrayers = data.map((p: any) => ({
+          id: p.id,
+          name: p.nome,
+          whatsapp: p.whatsapp,
+          category: p.motivo,
+          request_text: p.pedido,
+          is_confidential: p.manter_confidencial,
+          created_at: p.criado_em
+        }));
+        setPrayers(mappedPrayers);
       }
-    } catch {
-      setPrayers([]);
+    } catch (error) {
+      console.error('Erro ao buscar pedidos:', error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchPrayers();
   }, []);
 
-  const handlePrayClick = (prayerId: string) => {
-    if (prayedIds.includes(prayerId)) return;
-
-    const newPrayed = [...prayedIds, prayerId];
-    setPrayedIds(newPrayed);
-    try {
-      localStorage.setItem(PRAYED_IDS_KEY, JSON.stringify(newPrayed));
-    } catch {
-      // ignore
-    }
-
-    const updated = prayers.map((p) =>
-      p.id === prayerId ? { ...p, prayCount: p.prayCount + 1 } : p
-    );
-    setPrayers(updated);
-    try {
-      localStorage.setItem(PRAYERS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  // 2. FUNÇÃO QUE SALVA O NOVO PEDIDO NO BANCO SQL
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!requestText.trim()) return;
 
-    const newPrayer: PedidoOracaoItem = {
-      id: `prayer-${Date.now()}`,
-      name: name.trim() || 'Irmão(ã) em Oração',
-      category: category,
-      text: text.trim(),
-      date: 'Hoje',
-      isConfidential: isConfidential,
-      prayCount: 1,
-    };
-
-    const updated = [newPrayer, ...prayers];
-    setPrayers(updated);
     try {
-      localStorage.setItem(PRAYERS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
+      setSubmitting(true);
+      
+      const { error } = await supabase
+        .from('pedidos_oracao')
+        .insert([
+          {
+            nome: name.trim() || 'Anônimo',
+            whatsapp: phone.trim(),
+            motivo: category,
+            pedido: requestText.trim(),
+            manter_confidencial: isConfidential
+          }
+        ]);
 
-    // Automatically mark the user as praying for their own request
-    const newPrayed = [...prayedIds, newPrayer.id];
-    setPrayedIds(newPrayed);
-    try {
-      localStorage.setItem(PRAYED_IDS_KEY, JSON.stringify(newPrayed));
-    } catch {
-      // ignore
-    }
+      if (error) throw error;
 
-    if (sendWhatsAppDirect) {
-      const privacyMsg = isConfidential
-        ? '(Pedido Confidencial para a Pastoral)'
-        : '(Pedido para Intercessão)';
-      const msg = encodeURIComponent(
-        `*Pedido de Oração - Igreja Internacional Tenda*\n${privacyMsg}\n\n*Nome:* ${newPrayer.name}\n${phone ? `*WhatsApp:* ${phone}\n` : ''}*Motivo:* ${newPrayer.category}\n\n*Clamor:* ${newPrayer.text}`
-      );
-      window.open(`https://wa.me/5511959705669?text=${msg}`, '_blank');
-    }
+      setSuccessMessage('Pedido de oração enviado com sucesso! Estaremos orando por você.');
+      
+      // Limpa o formulário
+      setName('');
+      phone && setPhone('');
+      setRequestText('');
+      setIsConfidential(false);
 
-    // Reset Form
-    setName('');
-    setPhone('');
-    setText('');
-    setIsConfidential(false);
-    setSendWhatsAppDirect(false);
-    setSubmittedSuccess(true);
-    setTimeout(() => setSubmittedSuccess(false), 6000);
+      // Atualiza a lista na tela
+      fetchPrayers();
+
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (error) {
+      console.error('Erro ao enviar pedido:', error);
+      alert('Houve um erro ao enviar seu pedido. Tente novamente.');
+    } finally {
+      setSubmitting(false);
+    }
   };
-
-  // Filter public prayers for the wall
-  const publicPrayers = prayers.filter((p) => !p.isConfidential);
-  const filteredWallPrayers =
-    activeCategoryFilter === 'todos'
-      ? publicPrayers
-      : publicPrayers.filter((p) => p.category === activeCategoryFilter);
 
   return (
-    <section id="oracao" className="py-20 sm:py-24 bg-[#FAF7F2] border-b border-[#E8E1D7] relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 gap-6">
-          <div>
-            <span className="text-xs uppercase tracking-widest text-[#BD5A2C] font-semibold block mb-2">
-              ALTAR DE CLAMOR & INTERCESSÃO
-            </span>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif text-stone-900 tracking-tight">
-              Pedidos de Oração
-            </h2>
-          </div>
-          <div className="max-w-lg text-sm sm:text-base text-stone-700 leading-relaxed font-normal">
-            "Não andeis ansiosos de coisa alguma; em tudo, porém, sejam conhecidas diante de Deus as vossas petições, pela oração e pela súplica." — Filipenses 4:6
-          </div>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Cabeçalho */}
+      <div className="text-center mb-12">
+        <h1 className="text-3xl font-bold flex items-center justify-center gap-2 text-slate-800">
+          <HeartHandshake className="text-rose-500" /> Pedidos de Oração
+        </h1>
+        <p className="text-slate-600 mt-2">Levemos as nossas petições diante de Deus em comunidade</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Formulário de Envio */}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-100 h-fit">
+          <h2 className="text-xl font-semibold mb-4 text-slate-700">Deixe seu Pedido</h2>
+          
+          {successMessage && (
+            <div className="mb-4 p-3 bg-emerald-50 text-emerald-700 rounded-lg flex items-center gap-2 border border-emerald-200">
+              <CheckCircle2 size={18} /> {successMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Seu Nome (Opcional)</label>
+              <input 
+                type="text" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Deixe em branco para enviar como Anônimo"
+                className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp (Opcional)</label>
+              <input 
+                type="text" 
+                value={phone} 
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(00) 00000-0000"
+                className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Motivo do Pedido</label>
+              <select 
+                value={category} 
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+              >
+                {CATEGORIAS_ORACAO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Seu Pedido de Oração</label>
+              <textarea 
+                rows={4}
+                value={requestText} 
+                onChange={(e) => setRequestText(e.target.value)}
+                placeholder="Escreva aqui o seu motivo de oração de forma detalhada..."
+                className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                required
+              />
+            </div>
+
+            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <input 
+                type="checkbox" 
+                id="confidential"
+                checked={isConfidential}
+                onChange={(e) => setIsConfidential(e.target.checked)}
+                className="mt-1 rounded text-rose-500 focus:ring-rose-500"
+              />
+              <label htmlFor="confidential" className="text-xs text-slate-600 cursor-pointer">
+                <span className="font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
+                  <Lock size={12} /> Pedido Confidencial
+                </span>
+                Marque esta caixa se deseja que seu pedido seja visto <strong>apenas pelos pastores</strong> e não apareça no mural público do site.
+              </label>
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={submitting}
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-medium p-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-rose-400"
+            >
+              <Send size={16} /> {submitting ? 'Enviando...' : 'Enviar Pedido de Oração'}
+            </button>
+          </form>
         </div>
 
-        {/* 2-Column Layout: Form on Left, Prayer Wall on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-          {/* Left Column: Prayer Request Form */}
-          <div className="lg:col-span-5">
-            <div className="bg-white border border-[#E5DDD3] p-6 sm:p-8 rounded-xs shadow-xs sticky top-28">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#F0EAE1]">
-                <div className="w-10 h-10 rounded-full bg-[#BD5A2C]/10 text-[#BD5A2C] flex items-center justify-center shrink-0">
-                  <HeartHandshake className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-serif text-lg sm:text-xl font-medium text-stone-900">
-                    Apresentar seu Pedido
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Nossa equipe e pastores oram por cada clamor.
-                  </p>
-                </div>
-              </div>
+        {/* Mural Público de Pedidos */}
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
+          <h2 className="text-xl font-semibold mb-4 text-slate-700 flex items-center gap-2">
+            <Globe size={20} className="text-emerald-500" /> Mural de Oração da Família Tenda
+          </h2>
 
-              {submittedSuccess && (
-                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xs flex items-start gap-3 text-xs leading-relaxed animate-fadeIn">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Pedido recebido com reverência!</strong> Oramos para que o Senhor toque a sua vida e lhe dê a vitória.
-                  </div>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-stone-800 uppercase tracking-wider mb-1.5">
-                    Seu Nome (ou Deixe em Branco para Sigilo)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Maria de Lourdes ou 'Em Oração'"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#D9CFC2] rounded-xs focus:outline-none focus:border-[#B85526] transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-800 uppercase tracking-wider mb-1.5">
-                    WhatsApp (Opcional - Para Palavra Pastoral)
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="(11) 99999-9999"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#D9CFC2] rounded-xs focus:outline-none focus:border-[#B85526] transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-800 uppercase tracking-wider mb-1.5">
-                    Motivo da Oração
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#D9CFC2] rounded-xs focus:outline-none focus:border-[#B85526] transition-colors"
-                  >
-                    {CATEGORIAS_ORACAO.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-800 uppercase tracking-wider mb-1.5">
-                    Descreva seu Pedido de Oração
-                  </label>
-                  <textarea
-                    rows={4}
-                    placeholder="Descreva sua necessidade diante de Deus. Toda súplica com fé move o coração do Pai..."
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#D9CFC2] rounded-xs focus:outline-none focus:border-[#B85526] transition-colors resize-none"
-                    required
-                  />
-                </div>
-
-                {/* Privacy Toggle */}
-                <div className="pt-2 space-y-2">
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-stone-700 p-2.5 bg-[#FAF7F2] rounded-xs border border-[#E8E1D7]">
-                    <input
-                      type="checkbox"
-                      checked={isConfidential}
-                      onChange={(e) => setIsConfidential(e.target.checked)}
-                      className="mt-0.5 rounded border-[#D9CFC2] text-[#B85526] focus:ring-[#B85526]"
-                    />
-                    <div className="flex-1">
-                      <span className="font-semibold text-stone-900 block flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5 text-stone-500" />
-                        Manter confidencial apenas com os pastores
-                      </span>
-                      <span className="text-[11px] text-stone-500 leading-normal">
-                        Se marcado, o pedido não será publicado no mural público do site.
-                      </span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-stone-700 px-1">
-                    <input
-                      type="checkbox"
-                      checked={sendWhatsAppDirect}
-                      onChange={(e) => setSendWhatsAppDirect(e.target.checked)}
-                      className="mt-0.5 rounded border-[#D9CFC2] text-[#B85526] focus:ring-[#B85526]"
-                    />
-                    <span>
-                      Enviar também diretamente pelo WhatsApp da igreja ({CHURCH_INFO.whatsapp})
-                    </span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-[#B85526] hover:bg-[#A0451C] text-white text-sm font-medium rounded-xs transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-2 mt-4"
-                >
-                  <Send className="w-4 h-4" />
-                  Enviar Pedido de Oração
-                </button>
-
-                <div className="pt-3 border-t border-[#F0EAE1] flex items-center justify-center gap-2 text-[11px] text-stone-500 text-center">
-                  <ShieldCheck className="w-4 h-4 text-stone-400" />
-                  <span>Respeito pastoral, discrição e acolhimento garantidos.</span>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* Right Column: Public Prayer Wall & Pastoral Notice */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Urgent Pastoral Callout Card */}
-            <div className="p-6 bg-[#F4EDE4] border border-[#E2D7CB] rounded-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#BD5A2C]/10 text-[#BD5A2C] flex items-center justify-center shrink-0 mt-0.5">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-serif text-base font-semibold text-stone-900">
-                    Culto de Oração Semanal
-                  </h4>
-                  <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
-                    Toda <strong>Sexta-feira das 19h às 20h</strong> nos reunimos presencialmente no templo para interceder por todos os pedidos entregues na Tenda.
-                  </p>
-                </div>
-              </div>
-              <a
-                href={`https://wa.me/5511959705669?text=${encodeURIComponent('Paz do Senhor, preciso de oração e suporte pastoral urgente.')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-white hover:bg-stone-50 border border-[#D9CFC2] text-stone-800 text-xs font-medium rounded-xs transition-colors cursor-pointer inline-flex items-center gap-2 whitespace-nowrap shadow-2xs shrink-0"
-              >
-                <MessageCircle className="w-4 h-4 text-[#25D366]" />
-                Oração Urgente no WhatsApp
-              </a>
-            </div>
-
-            {/* Prayer Wall Title and Filter Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-              <div>
-                <h3 className="font-serif text-xl sm:text-2xl font-medium text-stone-900 flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-[#BD5A2C]" />
-                  Mural de Intercessão
-                </h3>
-                <p className="text-xs text-stone-600 font-light">
-                  Una sua fé à destes irmãos clicando em <strong>"Estou Orando"</strong>.
-                </p>
-              </div>
-
-              {/* Segmented Filter */}
-              <div className="flex items-center gap-1 bg-[#EFEAE2] p-1 rounded-xs overflow-x-auto max-w-full">
-                <button
-                  onClick={() => setActiveCategoryFilter('todos')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors cursor-pointer whitespace-nowrap ${
-                    activeCategoryFilter === 'todos'
-                      ? 'bg-white text-stone-900 shadow-2xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Todos
-                </button>
-                <button
-                  onClick={() => setActiveCategoryFilter('Saúde & Cura')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors cursor-pointer whitespace-nowrap ${
-                    activeCategoryFilter === 'Saúde & Cura'
-                      ? 'bg-white text-stone-900 shadow-2xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Saúde
-                </button>
-                <button
-                  onClick={() => setActiveCategoryFilter('Família & Casamento')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors cursor-pointer whitespace-nowrap ${
-                    activeCategoryFilter === 'Família & Casamento'
-                      ? 'bg-white text-stone-900 shadow-2xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Família
-                </button>
-                <button
-                  onClick={() => setActiveCategoryFilter('Portas de Emprego & Finanças')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors cursor-pointer whitespace-nowrap ${
-                    activeCategoryFilter === 'Portas de Emprego & Finanças'
-                      ? 'bg-white text-stone-900 shadow-2xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Emprego
-                </button>
-              </div>
-            </div>
-
-            {/* List of Prayer Cards */}
+          {loading ? (
+            <p className="text-slate-500 text-center py-8">Carregando pedidos de oração...</p>
+          ) : prayers.length === 0 ? (
+            <p className="text-slate-500 text-center py-8">Nenhum pedido público no momento. Seja o primeiro a colocar sua família em oração!</p>
+          ) : (
             <div className="space-y-4">
-              {filteredWallPrayers.length === 0 ? (
-                <div className="p-8 sm:p-12 text-center bg-white border border-[#E8E1D7] rounded-xs shadow-2xs">
-                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#FAF7F2] border border-[#E8E1D7] flex items-center justify-center text-[#BD5A2C]">
-                    <HeartHandshake className="w-6 h-6" />
+              {prayers.map((prayer) => (
+                <div key={prayer.id} className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold text-slate-800 text-sm">{prayer.name}</span>
+                    <span className="bg-rose-50 text-rose-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-rose-100">
+                      {prayer.category}
+                    </span>
                   </div>
-                  <h4 className="font-serif text-base sm:text-lg font-medium text-stone-900 mb-1">
-                    Nenhum pedido público no mural no momento
-                  </h4>
-                  <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto leading-relaxed">
-                    Você pode apresentar o seu motivo de oração preenchendo o formulário ao lado. Se preferir sigilo, marque a opção confidencial para que apenas os pastores leiam.
+                  <p className="text-slate-600 text-sm whitespace-pre-line bg-slate-50/50 p-2.5 rounded-md border border-slate-100/50">
+                    "{prayer.request_text}"
                   </p>
+                  <div className="text-[10px] text-slate-400 mt-2 text-right">
+                    {prayer.created_at ? new Date(prayer.created_at).toLocaleDateString('pt-BR') : ''}
+                  </div>
                 </div>
-              ) : (
-                filteredWallPrayers.map((p) => {
-                  const hasPrayed = prayedIds.includes(p.id);
-
-                  return (
-                    <div
-                      key={p.id}
-                      className="bg-white border border-[#E5DDD3] p-5 sm:p-6 rounded-xs shadow-2xs hover:border-[#BD5A2C]/60 transition-all flex flex-col justify-between"
-                    >
-                      <div>
-                        {/* Unboxed clean metadata kicker with separators */}
-                        <div className="flex items-center justify-between text-xs text-stone-500 mb-3 pb-2.5 border-b border-[#F7F2EC]">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#BD5A2C]">
-                              {p.category}
-                            </span>
-                            <span aria-hidden="true" className="text-stone-300">·</span>
-                            <span>{p.city || 'São Paulo'}</span>
-                          </div>
-                          <span className="font-mono text-[11px] text-stone-400">
-                            {p.date}
-                          </span>
-                        </div>
-
-                        <p className="text-stone-800 text-sm sm:text-base leading-relaxed font-normal mb-5">
-                          "{p.text}"
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-[#F7F2EC]">
-                        <div className="flex items-center gap-2 text-xs text-stone-600">
-                          <span className="font-medium font-serif text-stone-900">
-                            {p.name}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => handlePrayClick(p.id)}
-                          disabled={hasPrayed}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xs transition-all cursor-pointer ${
-                            hasPrayed
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                              : 'bg-[#FAF7F2] hover:bg-[#F2ECE3] border border-[#D9CFC2] text-stone-800 active:scale-95'
-                          }`}
-                        >
-                          {hasPrayed ? (
-                            <>
-                              <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Você orou por este pedido ({p.prayCount})</span>
-                            </>
-                          ) : (
-                            <>
-                              <HeartHandshake className="w-3.5 h-3.5 text-[#BD5A2C]" />
-                              <span>Estou Orando ({p.prayCount})</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
-    </section>
+    </div>
   );
 };
