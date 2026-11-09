@@ -246,17 +246,17 @@ export const LIDERES = [
   {
     name: 'Christian Lobatchevsky',
     role: 'APÓSTOLO',
-    image: '/assets/church/leader_christiam.jpg,
+    image: '/assets/church/leader_christian.jpg?v=3',
   },
   {
     name: 'Patrícia Lobatchevsky',
     role: 'APÓSTOLA',
-    image: '/assets/church/leader_patricia.jpg?,
+    image: '/assets/church/leader_patricia.jpg?v=2',
   },
   {
     name: 'Mauro Silva',
     role: 'PASTOR',
-    image: '/assets/church/leader_mauro.jpg,
+    image: '/assets/church/leader_mauro.jpg?v=2',
   },
 ];
 
