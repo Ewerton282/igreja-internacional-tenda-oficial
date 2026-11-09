@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, User, MapPin, Sparkles, Send, CheckCircle2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 interface TestemunhoData {
   id?: number;
